@@ -1,4 +1,6 @@
+const fs = require("fs");
 const Report = require("../models/Report");
+const { uploadToCloudinary, isCloudinaryConfigured } = require("../utils/cloudinary");
 
 exports.getUserProfile = (req, res) => {
   res.json({
@@ -20,13 +22,35 @@ exports.createReport = async (req, res) => {
       return res.status(400).json({ message: "Title is required" });
     }
 
-   const filename = req.file?.filename || "";
-   const imageUrl = filename
-     ? `${req.protocol}://${req.get("host")}/uploads/${filename}`.replace(
-         /\\/g,
-         "/"
-       )
-     : "";
+    const filename = req.file?.filename || "";
+    let imageUrl = "";
+
+    if (req.file) {
+      if (isCloudinaryConfigured) {
+        try {
+          const cloudUrl = await uploadToCloudinary(req.file.path);
+          if (cloudUrl) {
+            imageUrl = cloudUrl;
+            if (fs.existsSync(req.file.path)) {
+              fs.unlinkSync(req.file.path);
+            }
+          }
+        } catch (cloudErr) {
+          console.warn("Cloudinary upload failed, falling back to local file:", cloudErr.message);
+          imageUrl = `${req.protocol}://${req.get("host")}/uploads/${filename}`.replace(
+            /\\/g,
+            "/"
+          );
+        }
+      } else {
+        imageUrl = filename
+          ? `${req.protocol}://${req.get("host")}/uploads/${filename}`.replace(
+              /\\/g,
+              "/"
+            )
+          : "";
+      }
+    }
 
     const report = new Report({
       title,
